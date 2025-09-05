@@ -1,5 +1,6 @@
 import csv
 import os
+import ast
 
 FILENAME = 'students_db.csv'
 LANGUAGES = ['English', 'Swedish', 'French']
@@ -12,29 +13,41 @@ def load_students():
             for row in reader:
                 name = row['name']
                 age = row['age']
-                # Языки хранятся в CSV через запятую
-                language_classes = row['language_classes'].split(';')
-                students[name] = {'age': age, 'language_classes': set(language_classes)}
+                language_classes = row.get('language_classes', '')
+                grades_str = row.get('grades', '')
+                if language_classes:
+                    languages = set(language_classes.split(';'))
+                else:
+                    class_single = row.get('language_class', '')
+                    languages = {class_single} if class_single else set()
+                if grades_str:
+                    try:
+                        grades = ast.literal_eval(grades_str)
+                    except:
+                        grades = {}
+                else:
+                    grades = {}
+                students[name] = {'age': age, 'language_classes': languages, 'grades': grades}
     return students
 
 def save_students(students):
     with open(FILENAME, 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['name', 'age', 'language_classes']
+        fieldnames = ['name', 'age', 'language_classes', 'grades']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for name, info in students.items():
-            # Записываем языки через точку с запятой
             languages_str = ';'.join(sorted(info['language_classes']))
-            writer.writerow({'name': name, 'age': info['age'], 'language_classes': languages_str})
+            grades_str = str(info.get('grades', {}))
+            writer.writerow({'name': name, 'age': info['age'], 'language_classes': languages_str, 'grades': grades_str})
 
 def add_student(students):
     name = input('Введите имя ученика: ').strip()
     age = input('Введите возраст ученика: ').strip()
-    print('Выберите класс (можно несколько, через запятую):')
+    print('Выберите класс(ы) (можно несколько, через запятую):')
     for idx, lang in enumerate(LANGUAGES, 1):
         print(f'{idx}. {lang}')
     choices = input('Введите номер(а) языка(ов), например 1,3: ').strip()
-    selected_indexes = [c.strip() for c in choices.split(',') if c.strip() in ['1','2','3']]
+    selected_indexes = [c.strip() for c in choices.split(',') if c.strip() in ['1', '2', '3']]
 
     if not selected_indexes:
         print('Неверный выбор, попробуйте снова.')
@@ -42,16 +55,30 @@ def add_student(students):
 
     selected_languages = {LANGUAGES[int(i) - 1] for i in selected_indexes}
 
+    grades = {}
+    for lang in selected_languages:
+        while True:
+            try:
+                grade_input = input(f'Введите оценку ученика по {lang} в процентах (0-100): ').strip()
+                grade = float(grade_input)
+                if 0 <= grade <= 100:
+                    grades[lang] = grade
+                    break
+                else:
+                    print('Оценка должна быть от 0 до 100.')
+            except ValueError:
+                print('Пожалуйста, введите число.')
+
     if name in students:
-        # Если ученик уже есть, обновляем возраст и добавляем новые языки
         if students[name]['age'] != age:
             print(f"Обновляем возраст ученика {name} с {students[name]['age']} на {age}.")
             students[name]['age'] = age
         students[name]['language_classes'].update(selected_languages)
-        print(f"Языки ученика {name} обновлены: {', '.join(sorted(students[name]['language_classes']))}.")
+        students[name]['grades'].update(grades)
+        print(f"Данные ученика {name} обновлены.")
     else:
-        students[name] = {'age': age, 'language_classes': selected_languages}
-        print(f"Ученик {name} добавлен с языками: {', '.join(sorted(selected_languages))}.")
+        students[name] = {'age': age, 'language_classes': selected_languages, 'grades': grades}
+        print(f"Ученик {name} добавлен с языками и оценками.")
 
 def list_students(students):
     if not students:
@@ -60,7 +87,8 @@ def list_students(students):
     print('Ученики:')
     for i, (name, info) in enumerate(students.items(), 1):
         languages_str = ', '.join(sorted(info['language_classes']))
-        print(f"{i}. {name}, Возраст: {info['age']}, Классы: {languages_str}")
+        grades_str = ', '.join(f"{lang}: {info['grades'].get(lang, 'N/A')}%" for lang in sorted(info['language_classes']))
+        print(f"{i}. {name}, Возраст: {info['age']}, Классы: {languages_str}, Оценки: {grades_str}")
 
 def main():
     students = load_students()
